@@ -5,7 +5,8 @@ import './styles.css';
 const occasions = [
   { id: 'birthday', name: 'Birthday', cards: [
     ['MAKE A WISH', 'A little more magic'],
-    ['CAKE FIRST', 'Cake first, questions later'],
+    ['FIND THE GIFT', 'A 10-second birthday challenge'],
+    ['SWIFTIE ERA', 'A birthday made for a Taylor Swift fan'],
   ] },
   { id: 'anniversary', name: 'Anniversary', cards: [
     ['STILL US', 'And always will be'],
@@ -21,6 +22,14 @@ const birthdayRecipient = { name: 'Birthday Star', photoUrl: '' };
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 let birthdaySfxContext;
+let activeTuneStop;
+
+function stopCelebrationAudio() {
+  activeTuneStop?.();
+  if (birthdaySfxContext && birthdaySfxContext.state !== 'closed') birthdaySfxContext.close();
+  birthdaySfxContext = null;
+}
+
 function playBirthdaySfx(action, variation = 0) {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) return;
@@ -72,6 +81,34 @@ function BirthdayCakeArt() {
     <path d="M55 51c-3-4 3-6 0-10m28 8c-3-4 3-6 0-10m28 14c-3-4 3-6 0-10" fill="none" stroke="#e6ad55" strokeWidth="2" strokeLinecap="round"/>
     <path d="M27 56l3 7 7 1-5 5 1 7-6-4-6 4 1-7-5-5 7-1zM146 77l2 5 5 1-4 3 1 5-4-3-4 3 1-5-4-3 5-1z" fill="#e7bd69"/>
     <path d="M30 115h110" stroke="#d9b4a7" strokeWidth="2" strokeLinecap="round"/>
+  </svg>;
+}
+
+function GiftPuzzleArt() {
+  return <svg className="occasion-art" viewBox="0 0 180 130" role="img" aria-label="Colorful gift puzzle grid">
+    <rect x="34" y="14" width="35" height="31" rx="8" fill="#ff729c"/>
+    <rect x="74" y="14" width="35" height="31" rx="8" fill="#ffd34e"/>
+    <rect x="114" y="14" width="35" height="31" rx="8" fill="#59d2c0"/>
+    <rect x="34" y="50" width="35" height="31" rx="8" fill="#9e7cff"/>
+    <rect x="74" y="50" width="35" height="31" rx="8" fill="#ff9855"/>
+    <rect x="114" y="50" width="35" height="31" rx="8" fill="#6dbaff"/>
+    <rect x="34" y="86" width="35" height="31" rx="8" fill="#65c886"/>
+    <rect x="74" y="86" width="35" height="31" rx="8" fill="#ff75b9"/>
+    <rect x="114" y="86" width="35" height="31" rx="8" fill="#f6bd4c"/>
+    <path d="M84 62h16v19H84zM81 58h22v7H81zM92 58v23" fill="#fff8e8" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round"/>
+    <path d="M92 58c-8-2-8-9-3-9 4 0 4 5 3 9Zm0 0c8-2 8-9 3-9-4 0-4 5-3 9Z" fill="#ffe881" stroke="#fff" strokeWidth="1.5"/>
+  </svg>;
+}
+
+function SwiftieCardArt() {
+  return <svg className="occasion-art" viewBox="0 0 180 130" role="img" aria-label="Colorful friendship bracelet with stars">
+    <path d="M43 66c0-24 21-43 47-43s47 19 47 43-21 43-47 43S43 90 43 66Z" fill="none" stroke="#f3a6c4" strokeWidth="11" strokeDasharray="2 1"/>
+    <path d="M47 66c0-21 19-38 43-38s43 17 43 38-19 38-43 38-43-17-43-38Z" fill="none" stroke="#8c70df" strokeWidth="7" strokeDasharray="3 2"/>
+    <circle cx="90" cy="28" r="8" fill="#ffd65a"/><circle cx="128" cy="50" r="8" fill="#71d6c5"/><circle cx="125" cy="87" r="8" fill="#ff8c9f"/>
+    <circle cx="88" cy="104" r="8" fill="#ffb15c"/><circle cx="51" cy="84" r="8" fill="#7ac5f3"/><circle cx="53" cy="47" r="8" fill="#b58af2"/>
+    <path d="m31 24 3 7 7 1-5 5 1 7-6-4-6 4 1-7-5-5 7-1zM145 16l2 5 5 1-4 3 1 5-4-3-4 3 1-5-4-3 5-1zM151 98l2 5 5 1-4 3 1 5-4-3-4 3 1-5-4-3 5-1z" fill="#ffd85b"/>
+    <path d="M76 61h29M78 71h24" stroke="#fffaf5" strokeWidth="3" strokeLinecap="round"/>
+    <text x="90" y="68" textAnchor="middle" fontSize="8" fontWeight="700" fill="#fffaf5">13</text>
   </svg>;
 }
 
@@ -214,10 +251,203 @@ function BirthdaySlidesPage({ recipient }) {
   </main>;
 }
 
+const birthdayPuzzleIcons = ['🎈', '⭐', '🧁', '🎊', '🍓', '🎀', '🎁', '🍰', '🎉', '🍒', '🪅', '💝', '🌟', '🍭', '🎈', '🎂'];
+const birthdayPuzzleDuration = 10000;
+
+function shufflePuzzleGrid() {
+  const grid = [...birthdayPuzzleIcons];
+  for (let index = grid.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [grid[index], grid[swapIndex]] = [grid[swapIndex], grid[index]];
+  }
+  return grid;
+}
+
+function BirthdayPuzzlePage({ recipient }) {
+  const [tiles, setTiles] = useState(shufflePuzzleGrid);
+  const [gameState, setGameState] = useState('ready');
+  const [timeLeft, setTimeLeft] = useState(birthdayPuzzleDuration);
+  const [showOops, setShowOops] = useState(false);
+  const [showYay, setShowYay] = useState(false);
+  const giftIndex = tiles.indexOf('🎁');
+
+  useEffect(() => {
+    if (gameState !== 'playing') return undefined;
+    const deadline = Date.now() + birthdayPuzzleDuration;
+    const timer = window.setInterval(() => {
+      const remaining = Math.max(0, deadline - Date.now());
+      setTimeLeft(remaining);
+      if (remaining === 0) setGameState('lost');
+    }, 35);
+    return () => window.clearInterval(timer);
+  }, [gameState]);
+
+  useEffect(() => {
+    if (!showOops) return undefined;
+    const dismiss = window.setTimeout(() => setShowOops(false), 1400);
+    return () => window.clearTimeout(dismiss);
+  }, [showOops]);
+
+  useEffect(() => {
+    if (!showYay) return undefined;
+    const dismiss = window.setTimeout(() => setShowYay(false), 1800);
+    return () => window.clearTimeout(dismiss);
+  }, [showYay]);
+
+  function startGame() {
+    setTiles(shufflePuzzleGrid());
+    setTimeLeft(birthdayPuzzleDuration);
+    setGameState('playing');
+    playBirthdaySfx('start');
+  }
+
+  function chooseTile(index) {
+    if (gameState !== 'playing') return;
+    if (index === giftIndex) {
+      setGameState('won');
+      setShowYay(true);
+      playBirthdaySfx('celebrate');
+    } else {
+      setTimeLeft(0);
+      setGameState('lost');
+      setShowOops(true);
+      playBirthdaySfx('pop');
+    }
+  }
+
+  const message = gameState === 'won'
+    ? `You found your gift, ${recipient.name}! Happy birthday!`
+    : gameState === 'lost'
+      ? 'So close! The gift was hiding in plain sight.'
+      : gameState === 'playing'
+        ? 'Quick! Tap the gift before the timer runs out.'
+        : 'Your present is hiding in the colorful grid. Find it in 10 seconds!';
+
+  return <main className="landing-page wish-landing birthday-puzzle-page">
+    <BalloonScene />
+    <section className="wish-experience">
+      <div className={`wish-card gift-puzzle-card puzzle-${gameState}`}>
+        <CelebrationTune occasionId="birthday" />
+        <div className="puzzle-sparkle puzzle-sparkle-one" aria-hidden="true">✦</div>
+        <div className="puzzle-sparkle puzzle-sparkle-two" aria-hidden="true">✧</div>
+        <div className="puzzle-heading">
+          <span className="puzzle-eyebrow">A birthday mini challenge</span>
+          <h1>Find the gift!</h1>
+          <p>{message}</p>
+        </div>
+        <div className="puzzle-timer" aria-label={gameState === 'playing' ? `${Math.ceil(timeLeft / 1000)} seconds remaining` : 'Ten second challenge'}>
+          <span>{gameState === 'playing' ? Math.ceil(timeLeft / 1000) : gameState === 'won' ? '✓' : gameState === 'lost' ? '0' : '10'}</span>
+          <small>{gameState === 'won' ? 'found!' : 'seconds'}</small>
+        </div>
+        <div className="puzzle-clock-track" role="progressbar" aria-label="Time remaining" aria-valuemin="0" aria-valuemax={birthdayPuzzleDuration} aria-valuenow={timeLeft}>
+          <span style={{ width: `${gameState === 'playing' ? (timeLeft / birthdayPuzzleDuration) * 100 : gameState === 'ready' ? 100 : 0}%` }} />
+        </div>
+        <div className="gift-grid" aria-label="Colorful birthday puzzle grid">
+          {tiles.map((icon, index) => <button
+            className={`gift-grid-tile gift-tile-${index % 8} ${gameState === 'won' && index === giftIndex ? 'gift-found' : ''} ${gameState === 'lost' && index === giftIndex ? 'gift-reveal' : ''}`}
+            key={`${icon}-${index}`}
+            type="button"
+            disabled={gameState !== 'playing'}
+            onClick={() => chooseTile(index)}
+            aria-label={icon === '🎁' ? `Gift, tile ${index + 1}` : `Birthday surprise, tile ${index + 1}`}
+          >{icon}</button>)}
+        </div>
+        <div className="puzzle-footer" aria-live="polite">
+          {gameState === 'ready' && <button className="puzzle-play" type="button" onClick={startGame}>Ready, go! <span aria-hidden="true">→</span></button>}
+          {(gameState === 'won' || gameState === 'lost') && <button className="puzzle-play" type="button" onClick={startGame}>Play again <span aria-hidden="true">↻</span></button>}
+          {gameState === 'playing' && <span className="puzzle-live-hint">Tap the present! 🎁</span>}
+        </div>
+        {showOops && <div className="puzzle-oops" role="status"><span aria-hidden="true">🙈</span><strong>Oops!</strong><small>That’s not your gift!</small></div>}
+        {showYay && <div className="puzzle-yay" role="status"><span aria-hidden="true">🎉</span><strong>You found it!</strong><small>Happy birthday, {recipient.name}!</small></div>}
+      </div>
+    </section>
+  </main>;
+}
+
+const swiftieEras = [
+  { name: 'Lover', key: 'lover', color: '#ff77a6', wish: 'May your year be full of color, laughter, and the people who feel like home.' },
+  { name: '1989', key: '1989', color: '#62cce8', wish: 'Here’s to a bright new chapter and a year that feels completely yours.' },
+  { name: 'Reputation', key: 'reputation', color: '#514858', wish: 'Make a little mischief, take up space, and own every moment.' },
+  { name: 'Fearless', key: 'fearless', color: '#f3bf54', wish: 'May this year bring big dreams, brave choices, and golden memories.' },
+  { name: 'Midnights', key: 'midnights', color: '#7766c9', wish: 'Make a wish on every star. This next chapter is yours to write.' },
+];
+
+const swiftiePhotos = [
+  {
+    src: 'https://commons.wikimedia.org/wiki/Special:FilePath/Taylor_swift.jpg?width=500',
+    alt: 'Taylor Swift performing during the Eras Tour in Los Angeles',
+    author: 'Emazasm',
+    license: 'CC BY 4.0',
+    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    sourceUrl: 'https://commons.wikimedia.org/wiki/File:Taylor_swift.jpg',
+  },
+  {
+    src: 'https://commons.wikimedia.org/wiki/Special:FilePath/Taylor_Swift_at_the_2023_MTV_Video_Music_Awards_(1).png?width=500',
+    alt: 'Taylor Swift at the 2023 MTV Video Music Awards',
+    author: 'iHeartRadioCA',
+    license: 'CC BY 3.0',
+    licenseUrl: 'https://creativecommons.org/licenses/by/3.0/',
+    sourceUrl: 'https://commons.wikimedia.org/wiki/File:Taylor_Swift_at_the_2023_MTV_Video_Music_Awards_(1).png',
+  },
+  {
+    src: 'https://commons.wikimedia.org/wiki/Special:FilePath/Taylor_Swift,_2012.jpg?width=500',
+    alt: 'Taylor Swift performing on the Speak Now tour in Sydney in 2012',
+    author: 'Eva Rinaldi',
+    license: 'CC BY-SA 2.0',
+    licenseUrl: 'https://creativecommons.org/licenses/by-sa/2.0/',
+    sourceUrl: 'https://commons.wikimedia.org/wiki/File:Taylor_Swift,_2012.jpg',
+  },
+];
+
+function SwiftieBirthdayPage({ recipient }) {
+  const [selectedEra, setSelectedEra] = useState(swiftieEras[0]);
+
+  return <main className="landing-page wish-landing swiftie-page">
+    <BalloonScene />
+    <section className="wish-experience">
+      <div className={`wish-card swiftie-card era-${selectedEra.key}`}>
+        <CelebrationTune occasionId="birthday" />
+        <div className="swiftie-sparkle swiftie-sparkle-a" aria-hidden="true">✦</div>
+        <div className="swiftie-sparkle swiftie-sparkle-b" aria-hidden="true">✧</div>
+        <span className="swiftie-ticket">A TAYLOR SWIFT FAN BIRTHDAY</span>
+        <div className="swiftie-headliner">
+          <p>Tonight’s headliner</p>
+          <h1>{recipient.name}<span>!</span></h1>
+          <p className="swiftie-era-line">Welcome to your birthday era</p>
+        </div>
+        <div className="swiftie-gallery" aria-label="Taylor Swift photos">
+          {swiftiePhotos.map((photo) => <figure className="swiftie-photo-card" key={photo.sourceUrl}>
+            <img src={photo.src} alt={photo.alt} decoding="async" />
+            <figcaption><a href={photo.sourceUrl} target="_blank" rel="noreferrer">{photo.author}</a> · <a href={photo.licenseUrl} target="_blank" rel="noreferrer">{photo.license}</a> · cropped</figcaption>
+          </figure>)}
+        </div>
+        <div className="swiftie-bracelet" aria-label="Friendship bracelet spelling birthday">
+          {'BIRTHDAY'.split('').map((letter, index) => <span className={`bracelet-bead bead-${index % 5}`} key={`${letter}-${index}`}>{letter}</span>)}
+          <i aria-hidden="true">✦</i>
+        </div>
+        <p className="swiftie-wish">{selectedEra.wish}</p>
+        <div className="swiftie-era-picker">
+          <span>Pick your era color</span>
+          <div className="swiftie-era-options" role="group" aria-label="Choose a birthday era color">
+            {swiftieEras.map((era) => <button
+              className={`swiftie-era-option ${selectedEra.key === era.key ? 'selected' : ''}`}
+              key={era.key}
+              type="button"
+              onClick={() => { setSelectedEra(era); playBirthdaySfx('choice', swiftieEras.indexOf(era)); }}
+              aria-pressed={selectedEra.key === era.key}
+              style={{ '--era-color': era.color }}
+            >{era.name}</button>)}
+          </div>
+        </div>
+        <div className="swiftie-signoff"><span aria-hidden="true">♥</span> Your next chapter starts now <span aria-hidden="true">♥</span></div>
+      </div>
+    </section>
+  </main>;
+}
+
 function CelebrationTune({ occasionId }) {
   const contextRef = useRef(null);
   const timerRef = useRef(null);
-  const [playing, setPlaying] = useState(false);
   const melodies = {
     birthday: [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25, 587.33, 698.46, 880, 698.46, 659.25, 523.25],
     anniversary: [392, 493.88, 587.33, 659.25, 587.33, 493.88, 440, 523.25, 659.25, 587.33, 493.88, 392],
@@ -254,40 +484,34 @@ function CelebrationTune({ occasionId }) {
 
       playNote();
       timerRef.current = window.setInterval(playNote, 420);
-      setPlaying(true);
     } catch {
-      setPlaying(false);
+      // Autoplay may be blocked until the visitor interacts with the card.
     }
-  }
-
-  function stopMusic() {
-    if (timerRef.current) window.clearInterval(timerRef.current);
-    timerRef.current = null;
-    setPlaying(false);
   }
 
   useEffect(() => {
     startMusic();
-    return () => {
+    const retryAfterGesture = () => startMusic();
+    const stopTune = () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
       timerRef.current = null;
-      contextRef.current?.close();
+      if (contextRef.current && contextRef.current.state !== 'closed') contextRef.current.close();
+      contextRef.current = null;
+    };
+    activeTuneStop = stopTune;
+    window.addEventListener('pointerdown', retryAfterGesture, { once: true });
+    window.addEventListener('keydown', retryAfterGesture, { once: true });
+    window.addEventListener('pagehide', stopTune);
+    return () => {
+      window.removeEventListener('pointerdown', retryAfterGesture);
+      window.removeEventListener('keydown', retryAfterGesture);
+      window.removeEventListener('pagehide', stopTune);
+      if (activeTuneStop === stopTune) activeTuneStop = null;
+      stopTune();
     };
   }, []);
 
-  return <div className="music-control">
-    <button className={`music-disc ${playing ? 'playing' : ''}`} type="button" onClick={playing ? stopMusic : startMusic} aria-label={playing ? `Pause ${occasionId} music` : `Play ${occasionId} music`} aria-pressed={playing} title={playing ? `Pause ${occasionId} music` : `Play ${occasionId} music`}>
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        <circle cx="50" cy="50" r="48" fill="#344d43"/>
-        <circle cx="50" cy="50" r="40" fill="none" stroke="#60746a" strokeWidth="1"/>
-        <circle cx="50" cy="50" r="34" fill="none" stroke="#60746a" strokeWidth="1"/>
-        <circle cx="50" cy="50" r="28" fill="none" stroke="#60746a" strokeWidth="1"/>
-        <circle cx="50" cy="50" r="18" fill="#e8a2a6"/>
-        <text x="50" y="56" textAnchor="middle" fontSize="18" fill="#fffaf4">♫</text>
-      </svg>
-    </button>
-    <span className="music-hint">Tap the disc to play or pause the tune</span>
-  </div>;
+  return null;
 }
 
 function CelebrationCardPage({ routeOccasion, cardPage }) {
@@ -315,13 +539,15 @@ function App() {
   const routeOccasion = route && occasions.find(({ id }) => id === route[1]);
   const cardPage = routeOccasion?.cards.find(([title]) => slugify(title) === route?.[2]);
   const isFirstBirthdayCard = routeOccasion?.id === 'birthday' && cardPage?.[0] === 'MAKE A WISH';
+  const isBirthdayPuzzleCard = routeOccasion?.id === 'birthday' && cardPage?.[0] === 'FIND THE GIFT';
+  const isSwiftieBirthdayCard = routeOccasion?.id === 'birthday' && cardPage?.[0] === 'SWIFTIE ERA';
   const [active, setActive] = useState(routeOccasion?.id ?? 'birthday');
   const occasion = occasions.find((item) => item.id === active);
 
   return (
     <div className="site-shell">
-      <header className="topbar"><a href={baseUrl} className="wordmark" aria-label="WithLove home">with<span>love</span><i>®</i></a></header>
-      {cardPage && routeOccasion ? (isFirstBirthdayCard ? <BirthdaySlidesPage recipient={birthdayRecipient}/> : <CelebrationCardPage routeOccasion={routeOccasion} cardPage={cardPage} />) : <main id="home">
+      <header className="topbar"><a href={baseUrl} className="wordmark" aria-label="WithLove home" onClick={stopCelebrationAudio}>with<span>love</span><i>®</i></a></header>
+      {cardPage && routeOccasion ? (isFirstBirthdayCard ? <BirthdaySlidesPage recipient={birthdayRecipient}/> : isBirthdayPuzzleCard ? <BirthdayPuzzlePage recipient={birthdayRecipient}/> : isSwiftieBirthdayCard ? <SwiftieBirthdayPage recipient={birthdayRecipient}/> : <CelebrationCardPage routeOccasion={routeOccasion} cardPage={cardPage} />) : <main id="home">
         <section className="intro">
           <p className="eyebrow">A reason to celebrate</p>
           <h1>Say it <em>with love.</em></h1>
@@ -337,7 +563,7 @@ function App() {
         <section className="card-grid" id="card-grid" role="tabpanel" aria-labelledby={`tab-${occasion.id}`} key={occasion.id}>
           {occasion.cards.map(([title, caption]) => (
             <a className="greeting-card" key={`${occasion.id}-${title}`} href={`${baseUrl}cards/${occasion.id}/${slugify(title)}`} aria-label={`${title}: ${caption}`}>
-              <OccasionArt occasionId={occasion.id} />
+              {occasion.id === 'birthday' && title === 'FIND THE GIFT' ? <GiftPuzzleArt /> : occasion.id === 'birthday' && title === 'SWIFTIE ERA' ? <SwiftieCardArt /> : <OccasionArt occasionId={occasion.id} />}
               <span className="card-title">{title}</span>
               <span className="card-caption">{caption}</span>
             </a>
