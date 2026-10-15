@@ -15,7 +15,51 @@ const occasions = [
   ] },
 ];
 
+// Replace these placeholders when recipient name and photo forms are added.
+const birthdayRecipient = { name: 'Birthday Star', photoUrl: '' };
+
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+let birthdaySfxContext;
+function playBirthdaySfx(action, variation = 0) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+
+  const patterns = {
+    start: [[523, 0, 'sine'], [659, 0.09, 'sine'], [784, 0.18, 'triangle']],
+    candle: [[880 - variation * 45, 0, 'sine'], [587 - variation * 30, 0.08, 'triangle']],
+    cake: [[523, 0, 'triangle'], [659, 0.1, 'triangle'], [784, 0.2, 'sine']],
+    pop: [[420 + variation * 25, 0, 'square'], [180, 0.035, 'triangle']],
+    choice: [[659 + variation * 32, 0, 'sine'], [880 + variation * 40, 0.1, 'sine']],
+    next: [[440, 0, 'sine'], [660, 0.055, 'sine']],
+    back: [[520, 0, 'sine'], [390, 0.06, 'sine']],
+    celebrate: [[523, 0, 'triangle'], [659, 0.08, 'triangle'], [784, 0.16, 'triangle'], [1047, 0.24, 'sine']],
+  };
+
+  try {
+    const context = birthdaySfxContext || (birthdaySfxContext = new AudioContextClass());
+    if (context.state === 'suspended') context.resume().catch(() => {});
+    const now = context.currentTime;
+    (patterns[action] ?? patterns.next).forEach(([frequency, delay, type]) => {
+      const oscillator = context.createOscillator();
+      const volume = context.createGain();
+      const startAt = now + delay;
+      const length = action === 'pop' ? 0.13 : 0.2;
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      if (action === 'pop') oscillator.frequency.exponentialRampToValueAtTime(72, startAt + length);
+      volume.gain.setValueAtTime(0.0001, startAt);
+      volume.gain.exponentialRampToValueAtTime(action === 'pop' ? 0.045 : 0.035, startAt + 0.012);
+      volume.gain.exponentialRampToValueAtTime(0.0001, startAt + length);
+      oscillator.connect(volume);
+      volume.connect(context.destination);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + length + 0.015);
+    });
+  } catch {
+    // Sound is an enhancement; the card activities stay usable if audio is unavailable.
+  }
+}
 
 function BirthdayCakeArt() {
   return <svg className="occasion-art" viewBox="0 0 180 130" role="img" aria-label="Birthday cake with a balloon">
@@ -66,6 +110,108 @@ function BalloonScene() {
       <path d="M50 86c-8 17 9 27 1 41s9 19 2 31" fill="none" stroke="#aa9a8d" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>)}
   </div>;
+}
+
+function CakeActivity({ flames, onBlow, sliced, onSlice }) {
+  return <div className="cake-activity">
+    <div className="birthday-candles" aria-label="Birthday candles">
+      {flames.map((lit, index) => <button className={`birthday-candle ${lit ? 'lit' : 'blown'}`} key={index} type="button" disabled={!lit} onClick={() => { playBirthdaySfx('candle', index); onBlow(index); }} aria-label={`${lit ? 'Blow out' : 'Blown out'} candle ${index + 1}`}>
+        {lit ? <span className="candle-flame" aria-hidden="true"/> : <span className="candle-smoke" aria-hidden="true">〰</span>}
+        <span className="candle-wick" aria-hidden="true"/><span className="candle-stick" aria-hidden="true"/>
+      </button>)}
+    </div>
+    <button className={`cake-body ${sliced ? 'sliced' : ''}`} type="button" onClick={onSlice ?? undefined} disabled={!onSlice} aria-label={sliced ? 'Cake sliced' : 'Tap to cut the cake'}>
+      <span className="cake-top"/><span className="cake-layer"/><span className="cake-base"/>
+      {sliced && <span className="cake-slice-result" aria-hidden="true">🍰</span>}
+    </button>
+  </div>;
+}
+
+function BirthdaySlidesPage({ recipient }) {
+  const [slide, setSlide] = useState(0);
+  const [flames, setFlames] = useState([true, true, true]);
+  const [cakeSliced, setCakeSliced] = useState(false);
+  const [poppedBalloons, setPoppedBalloons] = useState([]);
+  const [birthdayPick, setBirthdayPick] = useState('');
+  const activities = [
+    { title: 'Birthday wishes, just for you', hint: 'Let’s make this day feel like yours.' },
+    { title: 'Make a wish', hint: 'Tap each candle flame to blow it out.' },
+    { title: 'Cake time!', hint: 'Tap the cake to cut the very first slice.' },
+    { title: 'Pop! Pop! Pop!', hint: 'Tap every balloon and send a wish flying.' },
+    { title: 'A little birthday joy', hint: 'What sounds the most fun today?' },
+  ];
+  const activity = activities[slide];
+  const canContinue = slide === 1 ? flames.every((lit) => !lit)
+    : slide === 2 ? cakeSliced
+      : slide === 3 ? poppedBalloons.length === 3
+        : slide === 4 ? Boolean(birthdayPick) : true;
+
+  function nextSlide() {
+    if (!canContinue) return;
+    setSlide((current) => current === activities.length - 1 ? 0 : current + 1);
+  }
+
+  function resetActivities() {
+    setSlide(0);
+    setFlames([true, true, true]);
+    setCakeSliced(false);
+    setPoppedBalloons([]);
+    setBirthdayPick('');
+  }
+
+  return <main className="landing-page wish-landing birthday-activities-page">
+    <BalloonScene />
+    <section className="wish-experience">
+      <div className={`wish-card birthday-slides-card slide-theme-${slide}`} aria-live="polite">
+        <CelebrationTune occasionId="birthday"/>
+        <div className="party-sprinkles" key={`sprinkles-${slide}`} aria-hidden="true">
+          {Array.from({ length: 16 }, (_, index) => <span key={index}/>) }
+        </div>
+        <div className="slide-progress" style={{ '--slide-progress': `${((slide + 1) / activities.length) * 100}%` }} aria-label={`Slide ${slide + 1} of ${activities.length}`}>
+          <span>{String(slide + 1).padStart(2, '0')}</span><i/> <span>{String(activities.length).padStart(2, '0')}</span>
+        </div>
+        <div className="activity-content" key={slide}>
+          {slide === 0 ? <>
+            <div className="recipient-photo">
+              {recipient.photoUrl ? <img src={recipient.photoUrl} alt={`${recipient.name}`} /> : <><span aria-hidden="true">♡</span><small>Photo goes here</small></>}
+            </div>
+            <p className="activity-kicker">A little celebration for</p>
+            <h1>{recipient.name}!</h1>
+            <p className="activity-hint">{activity.hint}</p>
+            <div className="welcome-sparkles" aria-hidden="true">✦　♡　✧</div>
+          </> : <>
+            <p className="activity-kicker">A birthday moment for {recipient.name}</p>
+            <h1>{activity.title}</h1>
+            <p className="activity-hint">{activity.hint}</p>
+            {slide === 1 && <CakeActivity flames={flames} onBlow={(index) => setFlames((current) => current.map((lit, i) => i === index ? false : lit))} sliced={false}/>}
+            {slide === 2 && <CakeActivity flames={flames.map(() => false)} onBlow={() => {}} sliced={cakeSliced} onSlice={() => { playBirthdaySfx('cake'); setCakeSliced(true); }}/>}
+            {slide === 3 && <div className="pop-balloons" aria-label="Pop the birthday balloons">
+              {['#e98e9a', '#80bfb1', '#f0bd63'].map((color, index) => poppedBalloons.includes(index)
+                ? <span className="popped-star" key={color} aria-label="Popped">✦</span>
+                : <button className="pop-balloon" key={color} style={{ '--balloon-color': color }} type="button" onClick={() => { playBirthdaySfx('pop', index); setPoppedBalloons((current) => [...current, index]); }} aria-label={`Pop balloon ${index + 1}`}><span/><i/></button>)}
+            </div>}
+            {slide === 4 && <div className="birthday-choices">
+              {['Cake & ice cream', 'Your favorite song', 'A little dance break', 'Make one more wish'].map((choice, index) => <button className={birthdayPick === choice ? 'chosen' : ''} key={choice} type="button" onClick={() => { playBirthdaySfx('choice', index); setBirthdayPick(choice); }}>{choice}</button>)}
+            </div>}
+          </>}
+        </div>
+        <nav className="slide-navigation" aria-label="Birthday card slides">
+          {slide > 0 ? <button className="slide-back" type="button" onClick={() => { playBirthdaySfx('back'); setSlide((current) => current - 1); }}>Back</button> : <span/>}
+          <button className="slide-next" type="button" onClick={() => {
+            if (slide === activities.length - 1) {
+              playBirthdaySfx('celebrate');
+              resetActivities();
+            } else {
+              playBirthdaySfx(slide === 0 ? 'start' : 'next');
+              nextSlide();
+            }
+          }} disabled={!canContinue}>
+            {slide === 0 ? 'Start the fun' : slide === activities.length - 1 ? 'Celebrate again' : 'Next'} <span aria-hidden="true">→</span>
+          </button>
+        </nav>
+      </div>
+    </section>
+  </main>;
 }
 
 function CelebrationTune({ occasionId }) {
@@ -161,16 +307,21 @@ function CelebrationCardPage({ routeOccasion, cardPage }) {
 }
 
 function App() {
-  const route = window.location.pathname.match(/^\/cards\/([^/]+)\/([^/]+)\/?$/);
+  const baseUrl = import.meta.env.BASE_URL;
+  const appPath = window.location.pathname.startsWith(baseUrl)
+    ? `/${window.location.pathname.slice(baseUrl.length)}`
+    : window.location.pathname;
+  const route = appPath.match(/^\/cards\/([^/]+)\/([^/]+)\/?$/);
   const routeOccasion = route && occasions.find(({ id }) => id === route[1]);
   const cardPage = routeOccasion?.cards.find(([title]) => slugify(title) === route?.[2]);
+  const isFirstBirthdayCard = routeOccasion?.id === 'birthday' && cardPage?.[0] === 'MAKE A WISH';
   const [active, setActive] = useState(routeOccasion?.id ?? 'birthday');
   const occasion = occasions.find((item) => item.id === active);
 
   return (
     <div className="site-shell">
-      <header className="topbar"><a href="/" className="wordmark" aria-label="WithLove home">with<span>love</span><i>®</i></a></header>
-      {cardPage && routeOccasion ? <CelebrationCardPage routeOccasion={routeOccasion} cardPage={cardPage} /> : <main id="home">
+      <header className="topbar"><a href={baseUrl} className="wordmark" aria-label="WithLove home">with<span>love</span><i>®</i></a></header>
+      {cardPage && routeOccasion ? (isFirstBirthdayCard ? <BirthdaySlidesPage recipient={birthdayRecipient}/> : <CelebrationCardPage routeOccasion={routeOccasion} cardPage={cardPage} />) : <main id="home">
         <section className="intro">
           <p className="eyebrow">A reason to celebrate</p>
           <h1>Say it <em>with love.</em></h1>
@@ -185,7 +336,7 @@ function App() {
         </nav>
         <section className="card-grid" id="card-grid" role="tabpanel" aria-labelledby={`tab-${occasion.id}`} key={occasion.id}>
           {occasion.cards.map(([title, caption]) => (
-            <a className="greeting-card" key={`${occasion.id}-${title}`} href={`/cards/${occasion.id}/${slugify(title)}`} aria-label={`${title}: ${caption}`}>
+            <a className="greeting-card" key={`${occasion.id}-${title}`} href={`${baseUrl}cards/${occasion.id}/${slugify(title)}`} aria-label={`${title}: ${caption}`}>
               <OccasionArt occasionId={occasion.id} />
               <span className="card-title">{title}</span>
               <span className="card-caption">{caption}</span>
